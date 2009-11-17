@@ -1,0 +1,28 @@
+#*
+
+file: VO.vm
+
+This is the template for our VO generator!
+
+*#
+package $newPackage;
+
+import java.util.Date;
+import java.sql.Timestamp;
+
+public class $newName {
+
+#foreach ($field in $fields)
+    private $field.type $field.name;
+#end
+
+#foreach ($field in $fields)
+    public $field.type ${field.getter}() {
+        return this.$field.name;
+    }
+
+    public void ${field.setter}($field.type $field.name) {
+        this.$field.name = $field.name;
+    }
+#end
+}

@@ -19,27 +19,28 @@
 
 package us.gibb.dev.vo_gen;
 
-import japa.parser.ASTHelper;
+import japa.parser.JavaParser;
 import japa.parser.ast.CompilationUnit;
-import japa.parser.ast.ImportDeclaration;
-import japa.parser.ast.PackageDeclaration;
 import japa.parser.ast.body.BodyDeclaration;
-import japa.parser.ast.body.ClassOrInterfaceDeclaration;
-import japa.parser.ast.body.MethodDeclaration;
-import japa.parser.ast.body.ModifierSet;
-import japa.parser.ast.body.Parameter;
+import japa.parser.ast.body.FieldDeclaration;
 import japa.parser.ast.body.TypeDeclaration;
-import japa.parser.ast.expr.AnnotationExpr;
-import japa.parser.ast.expr.NullLiteralExpr;
-import japa.parser.ast.stmt.BlockStmt;
-import japa.parser.ast.stmt.ReturnStmt;
-import japa.parser.ast.type.ClassOrInterfaceType;
+import japa.parser.ast.body.VariableDeclarator;
 
 import java.io.File;
-import java.util.ArrayList;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.Velocity;
+import org.apache.velocity.app.VelocityEngine;
 
 /**
  */
@@ -67,6 +68,19 @@ public class VOGen {
      */
     private File srcDir;
 
+    /**
+     */
+    private String defaultPackage;
+    private VelocityEngine ve;
+    
+    public VOGen() throws Exception {
+        ve = new VelocityEngine();
+        ve.addProperty(Velocity.RESOURCE_LOADER, "class");
+        ve.addProperty("class.resource.loader.description", "Velocity Classpath Resource Loader");
+        ve.addProperty("class.resource.loader.class", "org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader");
+        ve.init();
+    }
+
     public Log getLog() {
         return log;
     }
@@ -74,10 +88,6 @@ public class VOGen {
     public void setLog(Log log) {
         this.log = log;
     }
-
-    /**
-     */
-    private String converterPackage;
 
     public File getOutDir() {
         return outDir;
@@ -119,95 +129,82 @@ public class VOGen {
         this.srcDir = javaRoot;
     }
 
-    public String getConverterPackage() {
-        return converterPackage;
+    public String getDefaultPackage() {
+        return defaultPackage;
     }
 
-    public void setConverterPackage(String converterPackage) {
-        this.converterPackage = converterPackage;
+    public void setDefaultPackage(String converterPackage) {
+        this.defaultPackage = converterPackage;
     }
 
-    @SuppressWarnings("unchecked")
     public void generate() throws GenerationException {
 
         try {
             log.info("classpath: "+ System.getProperty("java.class.path"));
+            if (outDir.exists()) {
+                FileUtils.cleanDirectory(outDir);
+            }
             for (String packageName : packages) {
                 
                 File directory = new File(srcDir, packageName.replace('.', '/'));
                 log.info("src: "+directory);
                 
-                CompilationUnit converter = new CompilationUnit();
-                converter.setImports(new ArrayList<ImportDeclaration>());
-                converter.setPackage(new PackageDeclaration(ASTHelper.createNameExpr(converterPackage)));
-                ClassOrInterfaceDeclaration converterType = new ClassOrInterfaceDeclaration(ModifierSet.PUBLIC, false, "VO");
-                ASTHelper.addTypeDeclaration(converter, converterType);
+                Map<String, Object> ctxt = new HashMap<String, Object>();
+                ctxt.put("defaultPackage", defaultPackage);
                 
-                Collection<File> files = FileUtils.listFiles(directory, new String[]{"java"}, false);
-                for (File file : files) {
-                    CompilationUnit cu = japa.parser.JavaParser.parse(file);
-                    ArrayList<ImportDeclaration> imports = new ArrayList<ImportDeclaration>();
-                    imports.add(new ImportDeclaration(ASTHelper.createNameExpr("java.util.Date"), false, false));
-                    imports.add(new ImportDeclaration(ASTHelper.createNameExpr("java.sql.Timestamp"), false, false));
-                    cu.setImports(imports);
-                    String voFileName = null;
-                    String newPackageName = packageName+".vo";
-                    cu.setPackage(new PackageDeclaration(ASTHelper.createNameExpr(newPackageName)));
+                Collection<File> javaFiles = getJavaFiles(directory);
+                LinkedHashMap<String, Map<String, Object>> classInfos = new LinkedHashMap<String, Map<String, Object>>();
+                ctxt.put("classes", classInfos);
+                
+                for (File file : javaFiles) {
+                    CompilationUnit cu = JavaParser.parse(file);
+
                     if (cu.getTypes() != null && !cu.getTypes().isEmpty()) {
-                        TypeDeclaration type = cu.getTypes().get(0);
-                        String originalTypeName = type.getName();
-                        log.info("javaparse: "+packageName+"."+originalTypeName);
-                        type.setAnnotations(new ArrayList<AnnotationExpr>());
-                        type.setName(originalTypeName+"VO");
-                        voFileName = type.getName()+".java";
+                        if (cu.getTypes().size() > 1) {
+                            log.warn("Unable to handle {0} types in {1}", cu.getTypes().size(), file.getAbsolutePath());
+                        }
                         
-                        ArrayList<BodyDeclaration> toRemove = new ArrayList<BodyDeclaration>();
-                        for (BodyDeclaration body : type.getMembers()) {
-                            body.setAnnotations(new ArrayList<AnnotationExpr>());
-                            if (body instanceof MethodDeclaration) {
-                                MethodDeclaration method = (MethodDeclaration) body;
-                                if (method.getName().equals("methodToIgnore")) {
-                                    toRemove.add(method);
+                        TypeDeclaration type = cu.getTypes().get(0);
+                        
+                        Map<String, Object> info = new HashMap<String, Object>();
+                        classInfos.put(packageName+"."+type.getName(), info);
+                        info.put("name", type.getName());
+                        info.put("packageName", packageName);
+                        String newPackage = packageName+".vo";
+                        info.put("newPackage", newPackage);
+                        String newName = type.getName()+"VO";
+                        info.put("newName", newName);
+                        info.put("newPackageDir", newPackage.replace('.', '/'));
+                        info.put("newFileName", newName+".java");
+                        
+                        LinkedHashMap<String, Map<String, String>> fields = new LinkedHashMap<String, Map<String, String>>();
+                        info.put("fields", fields);
+                        for (BodyDeclaration member : type.getMembers()) {
+                            if (member instanceof FieldDeclaration) {
+                                FieldDeclaration fieldDecl = (FieldDeclaration) member;
+                                List<VariableDeclarator> variables = fieldDecl.getVariables();
+                                for (VariableDeclarator var : variables) {
+                                    Map<String, String> field = new HashMap<String, String>();
+                                    String name = var.getId().getName();
+                                    field.put("name", name);
+                                    field.put("type", fieldDecl.getType().toString());
+                                    field.put("getter", "get"+StringUtils.capitalize(name));
+                                    field.put("setter", "set"+StringUtils.capitalize(name));
+                                    //TODO: account for boolean
+                                    //TODO: only put if has getter and setter method
+                                    fields.put(name+":"+fieldDecl.getType().toString(), field);
                                 }
                             }
                         }
-                        type.getMembers().removeAll(toRemove);
-                        
-                        converter.getImports().add(new ImportDeclaration(ASTHelper.createNameExpr(packageName+"."+originalTypeName), false, false));
-                        converter.getImports().add(new ImportDeclaration(ASTHelper.createNameExpr(newPackageName+"."+type.getName()), false, false));
-                        
-                        MethodDeclaration toVO = new MethodDeclaration(ModifierSet.PUBLIC, new ClassOrInterfaceType(type.getName()), "toVO");
-                        toVO.setModifiers(ModifierSet.addModifier(toVO.getModifiers(), ModifierSet.STATIC));
-                        ASTHelper.addMember(converterType, toVO);
-
-                        Parameter param = ASTHelper.createParameter(ASTHelper.createReferenceType(originalTypeName, 0), "o");
-                        ASTHelper.addParameter(toVO, param);
-                        
-                        BlockStmt block = new BlockStmt();
-                        toVO.setBody(block);
-                        
-                        ASTHelper.addStmt(block, new ReturnStmt(new NullLiteralExpr()));
-                        
-                        MethodDeclaration fromVO = new MethodDeclaration(ModifierSet.PUBLIC, new ClassOrInterfaceType(originalTypeName), "fromVO");
-                        fromVO.setModifiers(ModifierSet.addModifier(fromVO.getModifiers(), ModifierSet.STATIC));
-                        ASTHelper.addMember(converterType, fromVO);
-
-                        param = ASTHelper.createParameter(ASTHelper.createReferenceType(type.getName(), 0), "vo");
-                        ASTHelper.addParameter(fromVO, param);
-                        
-                        block = new BlockStmt();
-                        fromVO.setBody(block);
-                        ASTHelper.addStmt(block, new ReturnStmt(new NullLiteralExpr()));
                     }
-                    File pkgDir = new File(outDir, newPackageName.replace('.', '/'));
-                    FileUtils.forceMkdir(pkgDir);
-                    File javaFile = new File(pkgDir, voFileName);
-                    FileUtils.writeStringToFile(javaFile, cu.toString());
                 }
-                File pkgDir = new File(outDir, converterPackage.toString().replace('.', '/'));
-                FileUtils.forceMkdir(pkgDir);
-                File javaFile = new File(pkgDir, "VO.java");
-                FileUtils.writeStringToFile(javaFile, converter.toString());
+                MapUtils.verbosePrint(System.out, "ctxt", ctxt);
+                                
+                for (Map<String, Object> classInfo : classInfos.values()) {
+                    write("templates/VO.vm", classInfo, getFile((String) classInfo.get("newPackageDir"), (String) classInfo.get("newFileName")));
+                }
+                
+                write("templates/VOs.vm", ctxt, getFile(defaultPackage.replace('.', '/'), "VO.java"));
             }
         } catch (Exception e) {
             log.error(e);
@@ -215,5 +212,24 @@ public class VOGen {
         } finally {
             // cleanup as much as we can.
         }
+    }
+
+    private File getFile(String pkgName, String fileName) throws IOException {
+        File pkg = new File(outDir, pkgName);
+        FileUtils.forceMkdir(pkg);
+        File file = new File(pkg, fileName);
+        return file;
+    }
+
+    private void write(String template, Map<?, ?> ctxt, File out) throws Exception {
+        VelocityContext velocityContext = new VelocityContext(ctxt);
+        FileWriter writer = new FileWriter(out);
+        ve.mergeTemplate(template, "UTF-8", velocityContext, writer);
+        writer.close();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Collection<File> getJavaFiles(File directory) {
+        return FileUtils.listFiles(directory, new String[]{"java"}, false);
     }
 }
