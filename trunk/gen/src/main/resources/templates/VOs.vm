@@ -1,0 +1,34 @@
+#*
+
+file: VO.vm
+
+This is the template for our VO generator!
+
+*#
+package $defaultPackage;
+
+#foreach ($class in $classes)
+import ${class.packageName}.$class.name;
+import ${class.newPackage}.$class.newName;
+#end
+
+public class VO {
+
+#foreach ($class in $classes)
+    public static $class.name fromVO($class.newName vo) {
+        $class.name o = new ${class.name}();
+#foreach ($field in $class.fields)
+        o.${field.setter}(vo.${field.getter}());
+#end
+        return o;
+    }
+
+    public static $class.newName toVO($class.name o) {
+        $class.newName vo = new ${class.newName}();
+#foreach ($field in $class.fields)
+        vo.${field.setter}(o.${field.getter}());
+#end
+        return vo;
+    }
+#end
+}
