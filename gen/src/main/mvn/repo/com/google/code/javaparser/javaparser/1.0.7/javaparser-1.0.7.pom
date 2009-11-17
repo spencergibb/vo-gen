@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.google.code.javaparser</groupId>
+  <artifactId>javaparser</artifactId>
+  <packaging>jar</packaging>
+  <name>Java 1.5 Parser and AST</name>
+  <version>1.0.7</version>
+  <description>A Java 1.5 Parser with AST generation and visitor support</description>
+  <url>http://code.google.com/p/javaparser/</url>
+  <licenses>
+    <license>
+      <name>GNU Lesser General Public License</name>
+      <url>http://www.gnu.org/licenses/lgpl.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <scm>
+    <url>http://code.google.com/p/javaparser/</url>
+  </scm>
+</project>
