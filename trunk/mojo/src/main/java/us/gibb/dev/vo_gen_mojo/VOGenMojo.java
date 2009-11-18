@@ -97,7 +97,7 @@ public class VOGenMojo extends AbstractMojo {
      * @parameter expression="${vo.converterPackage}"
      * @required
      */
-    String converterPackage;
+    String defaultPackage;
 
     /**
      * Directory in which the "DONE" markers are saved that
@@ -152,7 +152,7 @@ public class VOGenMojo extends AbstractMojo {
         try {
             VOGen gen = new VOGen();
             gen.setClasses(classes);
-            gen.setConverterPackage(converterPackage);
+            gen.setDefaultPackage(defaultPackage);
             gen.setSrcDir(javaRoot);
             gen.setPackages(packages);
             gen.setOutDir(sourceRoot);
