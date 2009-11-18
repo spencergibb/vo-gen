@@ -23,6 +23,7 @@ import japa.parser.JavaParser;
 import japa.parser.ast.CompilationUnit;
 import japa.parser.ast.body.BodyDeclaration;
 import japa.parser.ast.body.FieldDeclaration;
+import japa.parser.ast.body.MethodDeclaration;
 import japa.parser.ast.body.TypeDeclaration;
 import japa.parser.ast.body.VariableDeclarator;
 
@@ -187,12 +188,21 @@ public class VOGen {
                                     Map<String, String> field = new HashMap<String, String>();
                                     String name = var.getId().getName();
                                     field.put("name", name);
-                                    field.put("type", fieldDecl.getType().toString());
-                                    field.put("getter", "get"+StringUtils.capitalize(name));
-                                    field.put("setter", "set"+StringUtils.capitalize(name));
-                                    //TODO: account for boolean
+                                    String fieldType = fieldDecl.getType().toString();
+                                    field.put("type", fieldType);
+                                    String getter = "get"+StringUtils.capitalize(name);
+                                    if (fieldType.equals("boolean")) {
+                                        getter = "is"+StringUtils.capitalize(name);
+                                    }
+                                    field.put("getter", getter);
+                                    String setter = "set"+StringUtils.capitalize(name);
+                                    field.put("setter", setter);
                                     //TODO: only put if has getter and setter method
-                                    fields.put(name+":"+fieldDecl.getType().toString(), field);
+                                    boolean hasGetter = hasMethod(getter, type, fieldType, null);
+                                    boolean hasSetter = hasMethod(setter, type, "void", fieldType);
+                                    if (hasGetter && hasSetter) {
+                                        fields.put(name+":"+fieldType, field);
+                                    }
                                 }
                             }
                         }
@@ -212,6 +222,32 @@ public class VOGen {
         } finally {
             // cleanup as much as we can.
         }
+    }
+
+    private boolean hasMethod(String methodName, TypeDeclaration type, String returnType, String paramType) {
+        for (BodyDeclaration member : type.getMembers()) {
+            if (member instanceof MethodDeclaration) {
+                MethodDeclaration method = (MethodDeclaration) member;
+                if (method.getName().equals(methodName)) {
+                    // check return type
+                    if (method.getType() == null || !method.getType().toString().equals(returnType)) {
+                        continue;
+                    }
+
+                    // check param type
+                    if (paramType == null && (method.getParameters() == null || method.getParameters().isEmpty())) {
+                        return true;
+                    }
+                    if (paramType != null && method.getParameters() != null && 
+                            method.getParameters().size() == 1 &&
+                            method.getParameters().get(0).getType().toString().equals(paramType)) 
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private File getFile(String pkgName, String fileName) throws IOException {

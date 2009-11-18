@@ -12,6 +12,7 @@ public class User {
     private String username;
     private Date birthday;
     private int i,j;
+    private boolean active;
 
     public Date getBirthday() {
         return birthday;
@@ -47,6 +48,14 @@ public class User {
         this.j = j;
     }
     
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
     public void methodToIgnore() {
         
     }
