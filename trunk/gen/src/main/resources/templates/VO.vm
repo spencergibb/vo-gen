@@ -9,12 +9,15 @@ package $newPackage;
 
 import java.util.Date;
 import java.sql.Timestamp;
+import java.io.Serializable;
 
-public class $newName {
+public class $newName implements Serializable{
 
 #foreach ($field in $fields)
     private $field.type $field.name;
 #end
+
+    public $newName() {}
 
 #foreach ($field in $fields)
     public $field.type ${field.getter}() {
