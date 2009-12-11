@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <plugins>
+    <plugin>
+      <name>Value Object Generation Maven2 Plugin</name>
+      <prefix>vo-gen-mojo</prefix>
+      <artifactId>vo-gen-mojo</artifactId>
+    </plugin>
+  </plugins>
+</metadata>
