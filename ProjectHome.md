@@ -1,0 +1,1 @@
+Generate Value Obects (and anything you want) from existing java source files
